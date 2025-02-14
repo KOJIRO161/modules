@@ -11,6 +11,8 @@ from datetime import datetime
 # from IPython.display import display
 import struct
 import h5py
+import sys
+sys.dont_write_bytecode = True
 
 # ファイル情報を出力する関数
 def print_fileinfo(filename):

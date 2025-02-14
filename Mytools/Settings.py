@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+import sys
+sys.dont_write_bytecode = True
 
 if True: # グラフの出力設定
     plt.rcParams['font.family'] ='Arial' # 使用するフォント Arial or DejaVu Serif
