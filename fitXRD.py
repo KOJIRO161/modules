@@ -372,10 +372,10 @@ def Vigot_func(x, ba, bb, *ps):
 
     return value
 
-class ConfigApp:
-    def __init__(self, root, json_file="config.json"):
-        self.root = root
-        self.root.title("JSON同期設定 GUI")
+class ConfigApp(tk.Tk):
+    def __init__(self, json_file="config.json"):
+        super().__init__()
+        self.title("JSON同期設定 GUI")
         self.json_file = json_file
         
         # 初期設定のJSONデータ
@@ -416,10 +416,10 @@ class ConfigApp:
         """GUIのウィジェットを作成する関数"""
 
         # Operation選択ドロップダウン
-        ttk.Label(self.root, text="Operation:").grid(row=0, column=0, padx=10, pady=5)
+        ttk.Label(self, text="Operation:").grid(row=0, column=0, padx=10, pady=5)
         self.operation_var = tk.StringVar(value=self.config["operation"])
         operation_dropdown = ttk.Combobox(
-            self.root,
+            self,
             textvariable=self.operation_var,
             values=["add", "subtract", "multiply", "divide"]
         )
@@ -433,12 +433,12 @@ class ConfigApp:
                                 ))
 
         # Value1入力
-        ttk.Label(self.root, text="Value 1:").grid(row=1,
+        ttk.Label(self, text="Value 1:").grid(row=1,
                                                    column=0,
                                                    padx=10,
                                                    pady=5)
         self.value1_var = tk.IntVar(value=self.config["value1"])
-        value1_entry = ttk.Entry(self.root, textvariable=self.value1_var)
+        value1_entry = ttk.Entry(self, textvariable=self.value1_var)
         value1_entry.grid(row=1, column=1, padx=10, pady=5)
         value1_entry.bind("<FocusOut>",
                           lambda e: self.update_config(
@@ -447,14 +447,14 @@ class ConfigApp:
                           ))
 
         # Value2入力
-        ttk.Label(self.root, text="Value 2:").grid(row=2, column=0, padx=10, pady=5)
+        ttk.Label(self, text="Value 2:").grid(row=2, column=0, padx=10, pady=5)
         self.value2_var = tk.IntVar(value=self.config["value2"])
-        value2_entry = ttk.Entry(self.root, textvariable=self.value2_var)
+        value2_entry = ttk.Entry(self, textvariable=self.value2_var)
         value2_entry.grid(row=2, column=1, padx=10, pady=5)
         value2_entry.bind("<FocusOut>", lambda e: self.update_config("value2", self.value2_var.get()))
 
         # 結果表示ラベル
-        self.result_label = ttk.Label(self.root, text="Result: ")
+        self.result_label = ttk.Label(self, text="Result: ")
         self.result_label.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 
     def update_result(self):
@@ -479,6 +479,12 @@ class ConfigApp:
 
         self.result_label.config(text=f"Result: {result}")
 
+def run_App():
+    app = ConfigApp()
+    app.mainloop()
+    return
+
 if __name__ == "__main__":
 
     print("OK")
+    run_App()
