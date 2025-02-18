@@ -35,19 +35,23 @@ class peakfit:
         d = self.intensity[frame].copy()
 
         if not initparams:
-            _a0 = (d[-1]-d[0])/(self._theta_array[-1]-self._theta_array[0])
-            _b0 = d[0]-_a0*self._theta_array[0]
+            d_copy = d.copy()
+            _a0 = (d[-1]-d[0])/(self.theta[-1]-self.theta[0])
+            _b0 = d[0]-_a0*self.theta[0]
             initparams = [
                 _a0,
                 _b0
             ]
+            d_copy -= _a0*self.theta[0] + _b0
             for j in range(nop):
                 initparams += [
-                    (d.max()-d[0])/nop,
-                    self._theta_array[(d-_a0*self._theta_array - _b0).argmax()],
-                    (self._theta_array[-1]-self._theta_array[0])/5,
+                    (d_copy.max()-d_copy.min())/nop, # amp
+                    self.theta[d_copy.argmax()], # mu
+                    (self.theta[-1]-self.theta[0])/4, # fwhm_g
+                    (self.theta[-1]-self.theta[0])/4, # fwhm_l
                     0.5
                 ]
+                d_copy -= pseudoVoigt(self.theta, *initparams)
 
         methods = ["trf", "dogbox"]
 
@@ -60,7 +64,7 @@ class peakfit:
         
         for method in methods:
             try:
-                func = Vigot_func
+                func = pseudoVoigt
                 (popt, pcov) = sp.optimize.curve_fit(func,
                                                     self.theta,
                                                     d,
@@ -91,9 +95,9 @@ class peakfit:
         l_r2 = []
 
         for i in range(self.intensity.shape[0]):
-            _ = self.fit_Vigot_func_solo(frame = i,
-                                              nop = nop,
-                                              )
+            _ = self.fit_Vigot_func(frame = i,
+                                    nop = nop,
+                                    )
             popt = _[0]
             pcov = _[1]
             r_squared = _[2]
@@ -108,18 +112,40 @@ class peakfit:
 
         return (popts, pcovs, r2)
     
-def Vigot_func(x, ba, bb, *ps):
-
+def pseudoVoigt(x, ba, bb, *ps):
     value = ba*x + bb
+    for i in range(len(ps)//5):
+        amp = ps[5*i]
+        mu = ps[5*i+1]
+        fwhm_g = ps[5*i+2]
+        fwhm_l = ps[5*i+3]
+        eta = ps[5*i+4]
 
-    for i in range(len(ps)//4):
-        amp = ps[4*i]
-        mu = ps[4*i + 1]
-        sigma = ps[4*i + 2]
-        p = ps[4*i + 3]
+        sigma = fwhm_g/2/np.sqrt(2*np.log(2))
+        gamma = fwhm_l/2
+        
+        g = np.exp(-np.power(x-mu, 2)/2/np.power(sigma,2))
+        l = 1/(1+np.power((x-mu)/gamma, 2))
 
-        g = np.exp((-(x-mu)**2)/(2*sigma**2))
-        l = sigma**2 / (((x-mu)**2) + sigma**2)
-        value += amp*(g*p + l*(1-p))
+        value += amp*(g*eta + l*(1-eta))
+        return value
 
-    return value
+if __name__ == "__main__":
+
+    fig, ax = plt.subplots()
+
+    x = np.linspace(-1,1, 100)
+    for eta in np.linspace(0,1,10):
+        popt = [
+            0,
+            0,
+            1, # amp
+            0, # mu
+            0.5, # fwhm_g
+            0.5, # fwhm_l
+            eta, # eta
+        ]
+        y = pseudoVoigt(x, *popt)
+        ax.plot(x,y)
+    plt.show()
+    plt.close()
