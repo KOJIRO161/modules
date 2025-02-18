@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk
 import json
 import os
+from pprint import pprint
 
 class peakfit:
     # 最終更新日:2024/11/06
@@ -486,43 +487,59 @@ def run_App():
     return
 
 class ButtonCreator(tk.Tk):
-    def __init__(self):
+    def __init__(self,
+                 json_file = "config.json"):
+        """初期化関数"""
+
         # 初期化
         super().__init__()
         self.title("Set configuration")
+        self.json_file = json_file
+
+        # 初期設定のJSONデータ
+        self.configs = {
+            "auto/step": "",
+            "ranges": "",
+            "init": "",
+        }
+
+        # JSONファイルが存在しなければデフォルト設定で作成
+        if not os.path.exists(self.json_file):
+            self.save_config(self.configs)
+
+        # 現在の設定を読み込む
+        self.configs = self.load_config()
 
         # widgetを作成する
         self.create_widget()
 
-        # 初期のボタン数を保持する変数
-        self.button_count = 1
+    def load_config(self):
+        """JSONファイルから設定を読み込む関数"""
+        with open(self.json_file, "r") as f:
+            return json.load(f)
+
+    def save_config(self, config):
+        """設定をJSONファイルに保存する関数"""
+        with open(self.json_file, "w") as f:
+            json.dump(config, f, indent=4)
 
     def create_widget(self):
-
+        """widgetを作成する関数"""
         # auto/step
-        self.combo, self.cval = self.create_combobox()
+        self.combo = self.create_combobox()
         self.combo.pack()
 
         # ranges
-        self.frame_range, self.dict_ranges = self.create_rangeEntries()
+        self.frame_range = self.create_rangeEntries()
         self.frame_range.pack()
         
-        self.frame_peaknumber, self.peaknumber = self.create_peaknumber()
+        # peaknumber
+        self.frame_peaknumber = self.create_peaknumber()
         self.frame_peaknumber.pack()
-
-        # ボタンを作成するボタン
-        self.submit_button = tk.Button(self, text="ボタンを作成", command=self.create_buttons)
-        self.submit_button.pack()
-
-        # 1つボタンを増やすボタン
-        self.add_button_button = tk.Button(self, text="ボタンを1つ増やす", command=self.add_button)
-        self.add_button_button.pack()
-
-        # ボタンを表示するフレーム
-        self.frame = tk.Frame(self)
-        self.frame.pack()
     
     def create_combobox(self):
+        """comboboxを作成する関数"""
+        # widget作成
         comboval = ["auto", "step"]
         cval = tk.StringVar()
         combo = ttk.Combobox(
@@ -531,8 +548,24 @@ class ButtonCreator(tk.Tk):
             state = "readonly",
             textvariable=cval,
         )
-        combo.set(comboval[0])
-        return combo, cval
+
+        # 現在の値を挿入
+        val = self.configs["auto/step"] if self.configs["auto/step"] else comboval[0]
+        combo.set(value = val)
+        self.configs["auto/step"] = val
+
+        # comboboxに変更が加わった時の挙動を定義する
+        def change_combo(e = None, self = self, combo = combo):
+            self.configs["auto/step"] = combo.get()
+            self.save_config(config = self.configs)
+            return
+        change_combo()
+        combo.bind(
+            "<<ComboboxSelected>>",
+            change_combo,
+        )
+
+        return combo
 
     def create_rangeEntries(self):
 
@@ -542,142 +575,155 @@ class ButtonCreator(tk.Tk):
                                )
         dict_ranges = dict()
 
-        if True: # plotrange
-            frame_plotrange = tk.Frame(frame_range)
-            frame_plotrange.grid(column = 0, row = 0)
+        for column, label in enumerate(["plot range", "fit range"]):
 
-            title_plotrange = tk.Label(frame_plotrange,
-                                    text = "plot range")
-            title_plotrange.pack(
+            frame = tk.Frame(frame_range)
+            frame.grid(column = column, row = 0)
+
+            framelabel = tk.Label(frame,
+                                    text = label)
+            framelabel.pack(
                 side = "top",
                 anchor = "w"
             )
             
-            if True: # min
-                plotmin = tk.Frame(frame_plotrange)
-                plotmin.pack()
+            for m in ["min", "Max"]:
+                ff = tk.Frame(frame)
+                ff.pack()
 
-                label_plotmin = ttk.Label(plotmin,
-                                        text = "min")
-                label_plotmin.pack(side = "left")
+                ffl = ttk.Label(ff,
+                                        text = m)
+                ffl.pack(side = "left")
 
-                entry_plotmin = ttk.Entry(plotmin)
-                entry_plotmin.pack(side = "left",
+                ffentry = ttk.Entry(ff)
+                ffentry.pack(side = "left",
                                 expand = True,
                                 fill = "y")
-                entry_plotmin.bind("<KeyRelease>", self.change_ranges)
-                dict_ranges["plot min"] = entry_plotmin
-                
-            if True: # max
-                plotmax = tk.Frame(frame_plotrange)
-                plotmax.pack()
+                dict_ranges[label + " " + m] = ffentry
 
-                label_plotmax = ttk.Label(plotmax,
-                                        text = "max")
-                label_plotmax.pack(side = "left")
+        def change_ranges(e = None, self=self,  dict_ranges = dict_ranges):
+            for key in dict_ranges.keys():
+                self.configs["ranges"][key] = dict_ranges[key].get()
+            self.save_config(config=self.configs)
 
-                entry_plotmax = ttk.Entry(plotmax)
-                entry_plotmax.pack(side = "left",
-                                expand = True,
-                                fill = "y")
-                entry_plotmax.bind("<KeyRelease>", self.change_ranges)
-                dict_ranges["plot max"] = entry_plotmax
+        for key in dict_ranges.keys():
+            dict_ranges[key].insert(0, self.configs["ranges"][key])
 
-        if True: # plotrange
-            frame_fitrange = tk.Frame(frame_range)
-            frame_fitrange.grid(column = 1, row = 0)
+        change_ranges()
+        for key in dict_ranges.keys():
+            dict_ranges[key].bind("<KeyRelease>", change_ranges)
 
-            title_fitrange = tk.Label(frame_fitrange,
-                                    text = "fit range")
-            title_fitrange.pack(
-                side = "top",
-                anchor = "w"
-            )
-            
-            if True: # min
-                fitmin = tk.Frame(frame_fitrange)
-                fitmin.pack()
-
-                label_fitmin = ttk.Label(fitmin,
-                                        text = "min")
-                label_fitmin.pack(side = "left")
-
-                entry_fitmin = ttk.Entry(fitmin)
-                entry_fitmin.pack(side = "left",
-                                expand = True,
-                                fill = "y")
-                entry_fitmin.bind("<KeyRelease>", self.change_ranges)
-                dict_ranges["fit min"] = entry_fitmin
-                
-            if True: # max
-                fitmax = tk.Frame(frame_fitrange)
-                fitmax.pack()
-
-                label_fitmax = ttk.Label(fitmax,
-                                        text = "max")
-                label_fitmax.pack(side = "left")
-
-                entry_fitmax = ttk.Entry(fitmax)
-                entry_fitmax.pack(side = "left",
-                                expand = True,
-                                fill = "y")
-                entry_fitmax.bind("<KeyRelease>", self.change_ranges)
-                dict_ranges["fit max"] = entry_fitmax
-
-        return frame_range, dict_ranges
+        return frame_range
 
     def create_peaknumber(self):
         # エントリーフィールドとラベルを作成
         frame_peaknumber = tk.Frame(self)
 
-        entry_label = tk.Label(frame_peaknumber,
+        frame_setnumber = tk.Frame(frame_peaknumber)
+        frame_setnumber.pack()
+
+        entry_label = tk.Label(frame_setnumber,
                                     text="number of peaks:")
         entry_label.pack(
             side = "left"
         )
 
-        entry = tk.Entry(frame_peaknumber)
+        entry_button = ttk.Button(frame_setnumber,
+                                 text = "Go",
+                                #  command = self.change_peaknumber,
+                                 )
+        entry_button.pack(
+            side = "right"
+        )
+
+        entry = ttk.Entry(frame_setnumber)
         entry.pack(side = "left",
                    fill = "y",
                    expand = True)
-        entry.bind("<KeyRelease>", self.change_peaknumber)
+        entry.insert(0, 1)
 
-        return frame_peaknumber, entry
+        frame_setinit = tk.Frame(frame_peaknumber)
+        frame_setinit.pack()
 
-    def create_buttons(self):
-        # 入力された数を取得
-        try:
-            num_buttons = int(self.entry.get())
-        except ValueError:
-            return
-        
-        # 現在のボタンをクリア
-        for widget in self.frame.winfo_children():
-            widget.destroy()
+        self.configs["init"] = dict()
+        def create_initframes(e = None,
+                              self = self,
+                              frame = frame_setinit,
+                              entry = entry,
+                              ):
+            try:
+                number = int(entry.get())
+            except ValueError:
+                return
+            
+            for widget in frame.winfo_children():
+                widget.destroy()
 
-        # 新しいボタンを追加
-        self.button_count = num_buttons
-        for i in range(self.button_count):
-            button = tk.Button(self.frame, text=f"ボタン {i+1}")
-            button.pack()
+            for i in range(number):
+                f, c = self.create_initinputs(root = frame, n = i+1)
+                f.pack()
 
-    def add_button(self):
-        # 現在のボタン数を1つ増やす
-        self.button_count += 1
-        
-        # エントリーの中の数を更新
-        self.entry.delete(0, tk.END)  # エントリーをクリア
-        self.entry.insert(0, str(self.button_count))  # 新しい数を挿入
+                self.configs["init"]["Peak{}".format(i+1)] = dict()
+                for key in c.keys():
+                    self.configs["init"]["Peak{}".format(i+1)][key] = c[key]["entry"].get()
 
-        button = tk.Button(self.frame, text=f"ボタン {self.button_count}")
-        button.pack()
+        create_initframes()
+        entry_button.bind("<Button-1>", create_initframes)
 
-    def change_ranges(self, e = None):
-        for key in self.dict_ranges:
-            print(self.dict_ranges[key].get())
+        return frame_peaknumber
 
-    def change_peaknumber(self, e = None):
-        print(self.peaknumber.get())
+    def create_initinputs(self, root, n):
+        frame_initinputs = tk.Frame(root)
+
+        auto_peak = tk.BooleanVar()        
+        title_initinputs = ttk.Checkbutton(frame_initinputs,
+                                           text = "Peak{}".format(n),
+                                           variable=auto_peak)
+        title_initinputs.pack()
+        auto_peak.set(True)
+
+        frame_inits = tk.Frame(frame_initinputs)
+        frame_inits.pack()
+
+        if True:
+            def init_frames(root, label):
+                frame = tk.Frame(root)
+
+                components = dict()
+
+                flag = tk.BooleanVar()
+                flag.set(True)
+                components["flag"] = flag
+
+                check = ttk.Checkbutton(frame,
+                                        text = label,
+                                        variable=flag)
+                check.pack(side = "left")
+                components["title"] = check
+
+                entry = tk.Entry(frame)
+                entry.pack(side = "left", expand=True, fill = "y")
+                entry.config(state = "disabled")
+                check.bind(
+                    "<Button-1>",
+                    lambda x: entry.config(
+                        state = "normal" if flag.get() else "disable"
+                    )
+                )
+                components["entry"] = entry
+                return frame, components
+            
+            compo_init = dict()
+
+            for label in ["A", "x0", "gamma", "eta"]:
+                frame, components = init_frames(
+                    root = frame_inits,
+                    label = label,
+                )
+                frame.pack()
+                compo_init[label] = components
+
+        return frame_initinputs, compo_init
 
 class RealTimeGraphApp(tk.Tk):
     def __init__(self):
