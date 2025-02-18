@@ -27,31 +27,38 @@ class peakfit:
         value = self.theta[np.argmax(self.intensity, axis=1)]
         return value
     
+    def calc_init(self,
+                  frame,
+                  nop):
+        d_copy = self.intensity[frame].copy()
+        _a0 = (d_copy[-1]-d_copy[0])/(self.theta[-1]-self.theta[0])
+        _b0 = d_copy[0]-_a0*self.theta[0]
+        initparams = [
+            _b0,
+            _a0
+        ]
+        d_copy -= _a0*self.theta[0] + _b0
+        for _ in range(nop):
+            initparams += [
+                d_copy.max()-d_copy.min(), # amp
+                self.theta[d_copy.argmax()], # mu
+                (self.theta[-1]-self.theta[0])/4, # fwhm_g
+                (self.theta[-1]-self.theta[0])/4, # fwhm_l
+                0.5
+            ]
+            d_copy -= pseudoVoigt(self.theta, *initparams)
+        return initparams
+
     def fit_Vigot_func(self,
                        frame: int,
                        nop: int = 1,
+                       initparams: list = None,
                        ) -> tuple:
 
         d = self.intensity[frame].copy()
 
         if not initparams:
-            d_copy = d.copy()
-            _a0 = (d[-1]-d[0])/(self.theta[-1]-self.theta[0])
-            _b0 = d[0]-_a0*self.theta[0]
-            initparams = [
-                _a0,
-                _b0
-            ]
-            d_copy -= _a0*self.theta[0] + _b0
-            for j in range(nop):
-                initparams += [
-                    (d_copy.max()-d_copy.min())/nop, # amp
-                    self.theta[d_copy.argmax()], # mu
-                    (self.theta[-1]-self.theta[0])/4, # fwhm_g
-                    (self.theta[-1]-self.theta[0])/4, # fwhm_l
-                    0.5
-                ]
-                d_copy -= pseudoVoigt(self.theta, *initparams)
+            initparams = self.calc_init(frame = frame, nop = nop)
 
         methods = ["trf", "dogbox"]
 
@@ -66,13 +73,13 @@ class peakfit:
             try:
                 func = pseudoVoigt
                 (popt, pcov) = sp.optimize.curve_fit(func,
-                                                    self.theta,
-                                                    d,
-                                                    p0 = initparams,
-                                                    maxfev = 4000,
-                                                    bounds=bounds,
-                                                    method = method,
-                                                    )
+                                                     self.theta,
+                                                     d,
+                                                     p0 = initparams,
+                                                     maxfev = 4000,
+                                                     bounds=bounds,
+                                                     method = method,
+                                                     )
             except RuntimeError as errorcontent:
                 if method == methods[-1]:
                     return errorcontent
@@ -112,8 +119,8 @@ class peakfit:
 
         return (popts, pcovs, r2)
     
-def pseudoVoigt(x, ba, bb, *ps):
-    value = ba*x + bb
+def pseudoVoigt(x, b0, b1, *ps):
+    value = b0 + b1*x
     for i in range(len(ps)//5):
         amp = ps[5*i]
         mu = ps[5*i+1]
