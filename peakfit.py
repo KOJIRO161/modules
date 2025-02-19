@@ -62,8 +62,8 @@ class peakfit:
 
         methods = ["trf", "dogbox"]
 
-        bounds_up = [np.inf, self.theta[-1], np.inf, 1] * nop
-        bounds_down = [0, self.theta[0], 0, 0] * nop
+        bounds_up = [np.inf, self.theta[-1], np.inf, np.inf, 1] * nop
+        bounds_down = [0, self.theta[0], 0, 0, 0] * nop
         bounds = (
             tuple([-np.inf, -np.inf] + bounds_down),
             tuple([np.inf, np.inf] + bounds_up)
@@ -85,7 +85,7 @@ class peakfit:
                     return errorcontent
                 pass
             else:
-                res = d - func(self._theta_array,*popt)
+                res = d - func(self.theta,*popt)
                 rss = np.sum(np.square(res)) # residual sum of squares
                 tss = np.sum(np.square(d-np.mean(d))) # total sum of squares = tss
                 r_squared = 1 - (rss / tss)
