@@ -13,6 +13,8 @@ import json
 import os
 from pprint import pprint
 
+from tqdm import tqdm
+
 class peakfit:    
     def __init__(self,
                  theta: np.ndarray,
@@ -94,14 +96,16 @@ class peakfit:
         return [popt, np.diag(pcov), r_squared]
 
     def fit(self,
-            nop: int = 1
+            nop: int = 1,
+            log = False
             ) -> tuple:
 
         l_popt = []
         l_pcov = []
         l_r2 = []
 
-        for i in range(self.intensity.shape[0]):
+        loop = tqdm(list(range(self.intensity.shape[0]))) if log else range(self.intensity.shape[0])
+        for i in loop:
             _ = self.fit_Vigot_func(frame = i,
                                     nop = nop,
                                     )
