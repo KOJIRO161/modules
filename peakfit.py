@@ -1,5 +1,5 @@
 import sys
-sys.dont_write_bytecode = True
+sys.dont_write_bytecode = True # cacheを出さない
 
 import numpy as np
 from PIL import Image as im
@@ -17,55 +17,89 @@ from tqdm import tqdm
 
 class peakfit:    
     def __init__(self,
-                 theta: np.ndarray,
-                 intensity: np.ndarray,
+                 theta: np.ndarray = None,
+                 intensity: np.ndarray = None,
                  ) -> None:
-        """peakをフィットする関数です"""
+        """peakをフィットするクラス"""
         self.theta = theta # 1次元
         self.intensity = intensity # shape = (frame, theta)
         return
 
     def pick_max(self):
+        """argmaxを取ってくる"""
         value = self.theta[np.argmax(self.intensity, axis=1)]
         return value
     
-    def calc_init(self,
-                  frame,
-                  nop):
-        d_copy = self.intensity[frame].copy()
-        _a0 = (d_copy[-1]-d_copy[0])/(self.theta[-1]-self.theta[0])
-        _b0 = d_copy[0]-_a0*self.theta[0]
+    def calc_init(self = None,
+                  nop = 1,
+                  frame = 0,
+                  theta = None,
+                  intensity = None,
+                  ):
+        
+        if intensity is not None:
+            d_copy = intensity.copy()
+        else:
+            d_copy = self.intensity[frame].copy()
+
+        if theta is not None:
+            tth = theta.copy()
+        else:
+            if self.theta is not None:
+                tth = self.theta
+            else:
+                tth = np.arange(d_copy.shape[0])
+
+
+        _a0 = (d_copy[-1]-d_copy[0])/(tth[-1]-tth[0])
+        _b0 = d_copy[0]-_a0*tth[0]
         initparams = [
             _b0,
             _a0
         ]
-        d_copy -= _a0*self.theta[0] + _b0
+        d_copy -= _a0*tth[0] + _b0
         for _ in range(nop):
             initparams += [
                 d_copy.max()-d_copy.min(), # amp
-                self.theta[d_copy.argmax()], # mu
-                (self.theta[-1]-self.theta[0])/4, # fwhm_g
-                (self.theta[-1]-self.theta[0])/4, # fwhm_l
+                tth[d_copy.argmax()], # mu
+                (tth[-1]-tth[0])/4, # fwhm_g
+                (tth[-1]-tth[0])/4, # fwhm_l
                 0.5
             ]
-            d_copy -= pseudoVoigt(self.theta, *initparams)
+            d_copy -= pseudoVoigt(tth, *initparams)
         return initparams
 
     def fit_Vigot_func(self,
-                       frame: int,
+                       frame: int = 0,
                        nop: int = 1,
+                       theta: np.array = None,
+                       intensity: np.array = None,
                        initparams: list = None,
                        ) -> tuple:
 
-        d = self.intensity[frame].copy()
+        if intensity is not None:
+            d = intensity.copy()
+        else:
+            d = self.intensity[frame].copy()
+
+        if theta is not None:
+            tth = theta.copy()
+        else:
+            if self.theta is not None:
+                tth = self.theta.copy()
+            else:
+                tth = np.arange(d.shape[0])
 
         if not initparams:
-            initparams = self.calc_init(frame = frame, nop = nop)
+            if intensity is not None:
+                initparams = self.calc_init(intensity = intensity, theta = tth, nop = nop)
+            else:
+                initparams = self.calc_init(frame = frame, nop = nop)
 
         methods = ["trf", "dogbox"]
 
-        bounds_up = [np.inf, self.theta[-1], np.inf, np.inf, 1] * nop
-        bounds_down = [0, self.theta[0], 0, 0, 0] * nop
+        bounds_up = [np.inf, tth[-1], np.inf, np.inf, 1] * nop
+        bounds_down = [0, tth[0], 0, 0, 0] * nop
         bounds = (
             tuple([-np.inf, -np.inf] + bounds_down),
             tuple([np.inf, np.inf] + bounds_up)
@@ -75,7 +109,7 @@ class peakfit:
             try:
                 func = pseudoVoigt
                 (popt, pcov) = sp.optimize.curve_fit(func,
-                                                     self.theta,
+                                                     tth,
                                                      d,
                                                      p0 = initparams,
                                                      maxfev = 4000,
@@ -87,7 +121,7 @@ class peakfit:
                     return errorcontent
                 pass
             else:
-                res = d - func(self.theta,*popt)
+                res = d - func(tth,*popt)
                 rss = np.sum(np.square(res)) # residual sum of squares
                 tss = np.sum(np.square(d-np.mean(d))) # total sum of squares = tss
                 r_squared = 1 - (rss / tss)
@@ -97,7 +131,7 @@ class peakfit:
 
     def fit(self,
             nop: int = 1,
-            log = False
+            log = True
             ) -> tuple:
 
         l_popt = []

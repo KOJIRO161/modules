@@ -1,3 +1,6 @@
+import sys
+sys.dont_write_bytecode = True
+
 import os
 # import matplotlib.pyplot as plt
 # import matplotlib.figure as figure
@@ -11,9 +14,6 @@ from datetime import datetime
 # from IPython.display import display
 import struct
 import h5py
-
-import sys
-sys.dont_write_bytecode = True
 
 # ファイル情報を出力する関数
 def print_fileinfo(filename):
@@ -57,7 +57,7 @@ def dict_tree(d, indent="", last='updown'):
             connector = '└── ' if is_last else '├── '
             print("\n" + indent + connector + str(key), end = "")  # キーを表示
             new_indent = indent + ('    ' if is_last else '│   ')  # 次のレベルのインデント
-            print_tree(value, new_indent, 'up' if is_last else 'down')  # 再帰呼び出し
+            dict_tree(value, new_indent, 'up' if is_last else 'down')  # 再帰呼び出し
     else:
         if isinstance(d, np.ndarray):
             print(" " +  str(type(d)) + " [shape = {}]".format(d.shape), end = "")  # 辞書でない場合、値を表示
