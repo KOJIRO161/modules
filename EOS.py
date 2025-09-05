@@ -183,6 +183,100 @@ class Birch_Murnaghan_3rd:
             + np.square(dpdk0prime*self.err_k0prime)
         )
         return err
+    
+class thermalEOS_mieGruneisen:
+    def __init__(self):
+        self.v0 = None
+        self.theta0 = None
+        self.gamma_0 = None
+        self.q = None
+        self.n = None
+
+    def get_thermal_pressure(self, v, t):
+
+        flag = False
+        if type(v) == np.ndarray:
+            flag = True
+        if type(t) == np.ndarray:
+            flag = True
+        if flag:
+            if not type(v) == np.ndarray:
+                v = np.ones(t.shape)*v
+            if not type(t) ==  np.ndarray:
+                t = np.ones(v.shape)*t
+
+        x = (self.v0 / v)**(1/3)
+
+        gamma = self.gamma_0*np.power(v/self.v0, self.q)
+        thetaD = self.theta0 * np.exp((self.gamma_0 - gamma)/self.q)
+        
+        if flag:
+            deth_list = []
+            for i in range(len(v)):
+                deth_list.append(
+                    9*self.n*sp.constants.k * (
+                        t[i]*(t[i]/thetaD[i])**3
+                        * sp.integrate.quad(self.integral_func, 0, (thetaD[i]/t[i]))[0]
+                        -
+                        300*(300/thetaD[i])**3
+                        * sp.integrate.quad(self.integral_func, 0, (thetaD[i]/300))[0]
+                    )
+                )
+            deth = np.array(deth_list)
+        else:
+            deth = 9*self.n*sp.constants.k * (
+                        t*(t/thetaD)**3
+                        * sp.integrate.quad(self.integral_func, 0, (thetaD/t))[0]
+                        -
+                        300*(300/thetaD)**3
+                        * sp.integrate.quad(self.integral_func, 0, (thetaD/300))[0]
+                    )
+            
+        return gamma/v*deth * 1e21 # Pa * A^3 / m^3 --> GPa
+
+    # グリュナイゼンエネルギーの計算
+    def integral_func(self, x):
+        return x**3 / (np.exp(x) - 1)
+    
+    def get_thermal_pressure_Einstein(self, v, t):
+        x = v/self.v0
+        gamma = self.gamma_inf + (self.gamma_0 - self.gamma_inf)*np.power(x, self.beta)
+        theta = self.theta0 * np.power(x,-self.gamma_inf) * np.exp((self.gamma_0 - self.gamma_inf)/self.beta * (1-np.power(x,self.beta)))
+
+        R = 1.380649e-2 # A^3 GPa K^-1
+
+        value = 3*self.n*R*gamma/v*theta/(np.exp(theta/t)-1)
+        return value
+    
+    def get_dpdv_Einstein(self,v,t):
+        x = v/self.v0
+        gamma = self.gamma_inf + (self.gamma_0 - self.gamma_inf)*np.power(x, self.beta)
+        theta = self.theta0 * np.power(x,-self.gamma_inf) * np.exp((self.gamma_0 - self.gamma_inf)/self.beta * (1-np.power(x,self.beta)))
+
+        pth = self.get_thermal_pressure_Einstein(v,t)
+
+        dpthdv = -pth/v
+        
+        dpthdgamma = pth/gamma
+        dgammadx = self.beta*(self.gamma_0-self.gamma_inf)*np.power(x,self.beta-1)
+
+        dpthdtheta = pth/theta * (1 - theta/t*(np.exp(theta/t) / (np.exp(theta/t) - 1)))
+        dthetadx = -gamma*theta/x
+
+        dxdv = 1/self.v0
+
+        value = dpthdv + (dpthdgamma*dgammadx + dpthdtheta*dthetadx)*dxdv
+        return value
+    
+    def get_dpdt_Einstein(self,v,t):
+        x = v/self.v0
+        # gamma = self.gamma_inf + (self.gamma_0 - self.gamma_inf)*np.power(x, self.beta)
+        theta = self.theta0 * np.power(x,-self.gamma_inf) * np.exp((self.gamma_0 - self.gamma_inf)/self.beta * (1-np.power(x,self.beta)))
+
+        pth = self.get_thermal_pressure_Einstein(v,t)
+        dpthdt = pth/t * theta/t*(np.exp(theta/t) / (np.exp(theta/t) - 1))
+
+        return dpthdt
 
 class thermalEOS_gruneisen:
     def __init__(self):

@@ -1,11 +1,11 @@
 import sys
 sys.dont_write_bytecode = True # cacheを出さない
 
-import numpy as np
-from PIL import Image as im
-import matplotlib.pyplot as plt
-import matplotlib
-import scipy as sp
+import numpy as np # type: ignore
+from PIL import Image as im # type: ignore
+import matplotlib.pyplot as plt # type: ignore
+import matplotlib # type: ignore
+import scipy as sp # type: ignore
 
 import tkinter as tk
 from tkinter import ttk
@@ -13,7 +13,7 @@ import json
 import os
 from pprint import pprint
 
-from tqdm import tqdm
+from tqdm import tqdm # type: ignore
 
 class peakfit:    
     def __init__(self,
@@ -74,7 +74,7 @@ class peakfit:
                        nop: int = 1,
                        theta: np.array = None,
                        intensity: np.array = None,
-                       initparams: list = None,
+                       initparams: list = None, # type: ignore
                        ) -> tuple:
 
         if intensity is not None:
@@ -118,7 +118,7 @@ class peakfit:
                                                      )
             except RuntimeError as errorcontent:
                 if method == methods[-1]:
-                    return errorcontent
+                    return errorcontent # type: ignore
                 pass
             else:
                 res = d - func(tth,*popt)
@@ -127,7 +127,7 @@ class peakfit:
                 r_squared = 1 - (rss / tss)
                 
                 break
-        return [popt, np.diag(pcov), r_squared]
+        return [popt, np.diag(pcov), r_squared] # type: ignore
 
     def fit(self,
             nop: int = 1,
@@ -157,6 +157,11 @@ class peakfit:
 
         return (popts, pcovs, r2)
     
+    def variables(self, nop = 1):
+        value = ["b0", "b1"]
+        value += ["amp", "mu", "fwhm_g", "fwhm_l", "eta"] * nop
+        return value
+
 def pseudoVoigt(x, b0, b1, *ps):
     value = b0 + b1*x
     for i in range(len(ps)//5):
@@ -173,7 +178,7 @@ def pseudoVoigt(x, b0, b1, *ps):
         l = 1/(1+np.power((x-mu)/gamma, 2))
 
         value += amp*(g*eta + l*(1-eta))
-        return value
+    return value
 
 if __name__ == "__main__":
 

@@ -6,14 +6,18 @@ import os
 # import matplotlib.figure as figure
 # import matplotlib
 # import pickle
-import pandas as pd
-import numpy as np
+import pandas as pd # type: ignore
+import numpy as np # type: ignore
 # import scipy as sp
 from datetime import datetime
 # from PIL import Image as im
 # from IPython.display import display
 import struct
-import h5py
+import h5py # type: ignore
+
+"""変更履歴
+* 2025/08/26: dict_treeにheaderを含めました
+"""
 
 # ファイル情報を出力する関数
 def print_fileinfo(filename):
@@ -49,15 +53,17 @@ def h5_tree(val, layer=0, pre='', lim=5):
     return
 
 # dictを階層表示する関数
-def dict_tree(d, indent="", last='updown'):
+def dict_tree(d, indent="", last='updown', header = True):
     """辞書（dict）をツリー状にビジュアルで表示する関数"""
+    if header:
+        print(type(d), " (size = {:.2f} MB)".format(get_total_size(d)/1024/1024), end = "")
     if isinstance(d, dict):
         for i, (key, value) in enumerate(d.items()):
             is_last = (i == len(d) - 1)  # 最後の要素かどうか
             connector = '└── ' if is_last else '├── '
             print("\n" + indent + connector + str(key), end = "")  # キーを表示
             new_indent = indent + ('    ' if is_last else '│   ')  # 次のレベルのインデント
-            dict_tree(value, new_indent, 'up' if is_last else 'down')  # 再帰呼び出し
+            dict_tree(value, new_indent, 'up' if is_last else 'down', False)  # 再帰呼び出し
     else:
         if isinstance(d, np.ndarray):
             print(" " +  str(type(d)) + " [shape = {}]".format(d.shape), end = "")  # 辞書でない場合、値を表示
@@ -100,6 +106,56 @@ def his2array(filename):
     # Select the first frame's intensities for further processing
     img = sequential_image_intensities[0]
     return img
+
+# シンプルな進捗バーを生成
+def simple_progress_bar(current, total, bar_length=40, title = "Progress", tag = ""):
+    percent = current / total
+    filled_length = int(bar_length * percent)
+    bar = '■' * filled_length + '-' * (bar_length - filled_length)
+    print('\r{}: [{}] {:>3.0f}% ({}/{}) {}'.format(title, bar, percent * 100, current, total, tag), end='')
+
+    if current == total:
+        print()  # 最後に改行
+
+# .cacheを洗浄する関数
+def clean_cache_except_logfiles(target_dir):
+    if not os.path.exists(target_dir):
+        return
+
+    for root, dirs, files in os.walk(target_dir, topdown=False):
+        for file in files:
+            filepath = os.path.join(root, file)
+            # 直下かつ .log ファイルは残す
+            if root == target_dir and file.endswith(".log"):
+                continue
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"ファイル削除エラー: {filepath} - {e}")
+        
+        for dir in dirs:
+            dirpath = os.path.join(root, dir)
+            try:
+                os.rmdir(dirpath)
+            except Exception as e:
+                print(f"ディレクトリ削除エラー: {dirpath} - {e}")
+
+def get_total_size(obj, seen=None):
+    """あらゆるオブジェクトのサイズを再帰的に計算する"""
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    seen.add(obj_id)
+
+    if isinstance(obj, dict):
+        size += sum(get_total_size(k, seen) + get_total_size(v, seen) for k, v in obj.items())
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        size += sum(get_total_size(i, seen) for i in obj)
+    return size
 
 if __name__ == "__main__":
 
