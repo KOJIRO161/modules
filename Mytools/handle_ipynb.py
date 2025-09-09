@@ -90,14 +90,41 @@ def load_pickle(initialdir = None):
     else:
         return None
     
-def export_html(ipynbfile):
+def export_html(ipynbfile, initialdir = None):
 
     """変更履歴
+    * 2025/09/09: save_pickleを参考に書き換え
     * 2025/09/09: notebookから移植
     * 2025/08/01: 変更履歴作成
     """
 
-    # htmlに変換
-    subprocess.run(["jupyter", "nbconvert", "--to", "html", ipynbfile])
+    # 現在時刻の取得
+    dt = datetime.now()
+    initfilename = dt.strftime('%Y%m%d%H%M%S%f') + ".pkl"
 
-    return
+    # tkinterでファイルダイアログを開く
+    window = Tk()
+    window.wm_attributes("-topmost", 1)
+    window.withdraw()
+    filename = filedialog.asksaveasfilename(
+        parent = window,
+        filetypes = [
+            ("html", "*.html"),
+            ("md", "*.md")
+        ],
+        initialfile=initfilename,
+        initialdir=initialdir,
+        defaultextension=".html",
+    )
+
+    # filenameがセットされたら保存する
+    if not (filename == ""):
+        extension = os.path.splitext(filename)[1]
+        if extension == ".html":
+            subprocess.run(["jupyter", "nbconvert", "--to", "html", ipynbfile, "--output", filename])
+        elif extension == ".md":
+            subprocess.run(["jupyter", "nbconvert", "--to", "markdown", ipynbfile, "--output", filename])
+        return filename
+    else:
+        return None
+
