@@ -100,7 +100,7 @@ def export_html(ipynbfile, initialdir = None):
 
     # 現在時刻の取得
     dt = datetime.now()
-    initfilename = dt.strftime('%Y%m%d%H%M%S%f') + ".pkl"
+    initfilename = dt.strftime('%Y%m%d%H%M%S%f') + ".html"
 
     # tkinterでファイルダイアログを開く
     window = Tk()

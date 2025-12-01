@@ -67,7 +67,7 @@ class KCl_Dewele(Vinet):
         perr_themal = np.sqrt(np.square((t-300) * self.err_akt) + np.square(self.akt*errt))
         return np.sqrt(np.square(perr_300) + np.square(perr_themal))
 
-class Fe_Dorogokupets(Vinet):
+class  Fe_Dorogokupets(Vinet):
     def __init__(self):
         super().__init__()
         NA = 6.02214076e23 # /mol
