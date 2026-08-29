@@ -59,7 +59,41 @@ def save_pickle(data: dict, initialdir = None):
         return filename
     else:
         return None
+
+def ask_savefilename(data,
+                     filetypes: list,
+                     initialdir = None,
+                     initfilename = None):
+    """
+    ask_savefilename の Docstring
     
+    :param data: 保存するデータ
+    :param filetypes: データの拡張子
+    :type filetypes: list
+    :param initialdir: 最初に表示するディレクトリ
+    :param initfilename: ファイル名の初期値（Noneの場合、時間になる）
+    """
+    # 変更履歴
+    ## 2025年12月16日作成
+
+    # 現在時刻の取得
+    if initfilename == None:
+        dt = datetime.now()
+        extension = filetypes[0][1][1:]
+        initfilename = dt.strftime('%Y%m%d%H%M%S%f') + extension
+
+    # tkinterでファイルダイアログを開く
+    window = Tk()
+    window.wm_attributes("-topmost", 1)
+    window.withdraw()
+    filename = filedialog.asksaveasfilename(
+        parent = window,
+        filetypes = filetypes,
+        initialfile=initfilename,
+        initialdir=initialdir,
+    )
+    return filename
+
 def load_pickle(initialdir = None):
 
     """変更履歴
@@ -89,6 +123,30 @@ def load_pickle(initialdir = None):
         return data, filename
     else:
         return None
+    
+def ask_openfilename(filetypes: list,
+                     initialdir = None):
+    """
+    ask_openfilename の Docstring
+    
+    :param filetypes: データの拡張子
+    :type filetypes: list
+    :param initialdir: 最初に表示するディレクトリ
+    """
+    # 変更履歴
+    ## 2025年12月16日 作成
+
+
+    # tkinterでファイルダイアログを開く
+    window = Tk()
+    window.wm_attributes("-topmost", 1)
+    window.withdraw()
+    filename = filedialog.askopenfilename(
+        parent = window,
+        filetypes = filetypes,
+        initialdir=initialdir,
+    )
+    return filename
     
 def export_html(ipynbfile, initialdir = None):
 

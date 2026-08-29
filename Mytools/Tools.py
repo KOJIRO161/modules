@@ -75,14 +75,12 @@ def his2array(filename):
     with open(filename, 'rb') as file:
         data = file.read()
     
-    # Define the keys for the header information
     keylist = [
         "ID", "headerSize", "headerVersion", "fileSize", "imageHeaderSize",
         "ULX", "ULY", "BRX", "BRY", "numberOfFrame", "correction",
         "frameTimeInMicroseconds", "frameTimeInMilliseconds"
     ]
 
-    # Unpack the header data based on the expected structure
     info = dict(
         zip(
             keylist,
@@ -90,20 +88,18 @@ def his2array(filename):
         )
     )
 
-    # Calculate the image dimensions
+    # 【追加】デバッグ＆安全対策：ヘッダー情報がおかしい場合はエラーで知らせる
+    if info.get("headerSize", 0) == 0 or info.get("numberOfFrame", 0) == 0:
+        raise ValueError(f"【データ破損または形式違い】ファイル名: {filename}, ヘッダーサイズ: {info.get('headerSize')}")
+
     imageWidth = info["BRX"] - info["ULX"] + 1
     imageHeight = info["BRY"] - info["ULY"] + 1
 
-    # Calculate the starting position of the image data
     start_position = info["headerSize"] + info["imageHeaderSize"]
 
-    # Extract all image data as a numpy array
     image_data = np.frombuffer(data[start_position:], dtype=np.uint16)
-
-    # Reshape the image data to separate frames
     sequential_image_intensities = image_data.reshape((info["numberOfFrame"], imageHeight, imageWidth))
 
-    # Select the first frame's intensities for further processing
     img = sequential_image_intensities[0]
     return img
 

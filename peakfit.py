@@ -1,201 +1,507 @@
+"""変更履歴
+*2026-02-06 作成
+"""
+
 import sys
 sys.dont_write_bytecode = True # cacheを出さない
 
-import numpy as np # type: ignore
-from PIL import Image as im # type: ignore
-import matplotlib.pyplot as plt # type: ignore
-import matplotlib # type: ignore
-import scipy as sp # type: ignore
+import numpy as np
+import scipy as sp
 
-import tkinter as tk
-from tkinter import ttk
-import json
-import os
-from pprint import pprint
+class peakfit:
 
-from tqdm import tqdm # type: ignore
+    def __init__(self):
 
-class peakfit:    
-    def __init__(self,
-                 theta: np.ndarray = None,
-                 intensity: np.ndarray = None,
-                 ) -> None:
-        """peakをフィットするクラス"""
-        self.theta = theta # 1次元
-        self.intensity = intensity # shape = (frame, theta)
-        return
+        self.initparams = dict()
 
-    def pick_max(self):
-        """argmaxを取ってくる"""
-        value = self.theta[np.argmax(self.intensity, axis=1)]
+        self.x = np.array([])
+
+        self.y = np.array([])
+
+        self.func_list = [
+            "gaussian",
+            "lorenzian",
+            "psdVoigt",
+            "asympsdVoigt",
+        ]
+
+    def background(self,
+                   x: np.ndarray,
+                   params: dict,
+                   ) -> np.ndarray:
+        
+        b0 = params["b0"]
+        b1 = params["b1"]
+
+        value = b0 + b1*x
+        return value
+
+    def gaussian(self,
+                 x: np.ndarray,
+                 params: dict,
+                 ) -> np.ndarray:
+        """
+        :param x: 軸の値
+        :type x: np.ndarray
+        :param params: {
+            "center": ピーク位置 (float),
+            "height": ピークの高さ (float, >0),
+            "fwhm": 半値幅 (float, >0)
+        }
+        :type param: dict
+        :return: 密度関数
+        :rtype: np.ndarray
+        """
+
+        # 引数
+        center = params["center"]
+        height = params["height"]
+        fwhm = params["fwhm"]
+        
+        # 係数
+        sigma = fwhm/2/np.sqrt(2*np.log(2))
+        value = height
+        
+        # 関数
+        value *= np.exp(-np.square((x-center)/sigma)/2)
+
         return value
     
-    def calc_init(self = None,
-                  nop = 1,
-                  frame = 0,
-                  theta = None,
-                  intensity = None,
-                  ):
+    def gaussian_area(self,
+                      params: dict,
+                      ) -> float:
+        """
+        :param params: {
+            "height": ピークの高さ (float, >0),
+            "fwhm": 半値幅 (float, >0),
+        }
+        :type params: dict
+        :return: ガウシアンピークの面積
+        :rtype: float
+        """
+
+        # 引数
+        height = params["height"]
+        fwhm = params["fwhm"]
+
+        # 演算
+        sigma = fwhm/2/np.sqrt(2*np.log(2))
+        value = height * sigma * np.sqrt(2*np.pi)
+
+        return value
+    
+    def lorenzian(self,
+                  x: np.ndarray,
+                  params: dict,
+                  ) -> np.ndarray:
+        """
+        :param x: 軸の値
+        :type x: np.ndarray
+        :param params: {
+            "center": ピーク位置 (float),
+            "height": ピークの高さ (float, >0)
+            "fwhm": 半値幅 (float, >0)
+        }
+        :type params: dict
+        :return: 密度関数
+        :rtype: np.ndarray
+        """
+
+        # 引数
+        center = params["center"]
+        height = params["height"]
+        fwhm = params["fwhm"]
         
-        if intensity is not None:
-            d_copy = intensity.copy()
-        else:
-            d_copy = self.intensity[frame].copy()
+        # 係数
+        hwhm = fwhm/2
+        area = np.pi * height * hwhm
+        value = area/np.pi
 
-        if theta is not None:
-            tth = theta.copy()
-        else:
-            if self.theta is not None:
-                tth = self.theta
-            else:
-                tth = np.arange(d_copy.shape[0])
+        # 関数
+        value *= hwhm / (np.square(x - center) + np.square(hwhm))
 
+        return value
+    
+    def lorenzian_area(self,
+                       params: dict,
+                       ) -> float:
+        """
+        :param params: {
+            "height": ピークの高さ (float, >0),
+            "fwhm": 半値幅 (float, >0),
+        }
+        :type params: dict
+        :return: ローレンチアンピークの面積
+        :rtype: float
+        """
 
-        _a0 = (d_copy[-1]-d_copy[0])/(tth[-1]-tth[0])
-        _b0 = d_copy[0]-_a0*tth[0]
-        initparams = [
-            _b0,
-            _a0
-        ]
-        d_copy -= _a0*tth[0] + _b0
-        for _ in range(nop):
-            initparams += [
-                d_copy.max()-d_copy.min(), # amp
-                tth[d_copy.argmax()], # mu
-                (tth[-1]-tth[0])/4, # fwhm_g
-                (tth[-1]-tth[0])/4, # fwhm_l
-                0.5
-            ]
-            d_copy -= pseudoVoigt(tth, *initparams)
-        return initparams
+        # 引数
+        height = params["height"]
+        fwhm = params["fwhm"]
 
-    def fit_Vigot_func(self,
-                       frame: int = 0,
-                       nop: int = 1,
-                       theta: np.array = None,
-                       intensity: np.array = None,
-                       initparams: list = None, # type: ignore
-                       ) -> tuple:
+        # 演算
+        hwhm = fwhm / 2
+        value = np.pi * height * hwhm
 
-        if intensity is not None:
-            d = intensity.copy()
-        else:
-            d = self.intensity[frame].copy()
+        return value
+    
+    def psdVoigt(self,
+                 x: np.ndarray,
+                 params: dict,
+                 ) -> np.ndarray:
+        """
+        :param x: 軸の値
+        :type x: np.ndarray
+        :param params: {
+            "center": ピーク位置 (float),
+            "height": ピークの高さ (float, >0),
+            "fwhm": 半値幅 (float, >0),
+            "factor": ローレンチアン比率 (float, 0~1),
+        }
+        :type params: dict
+        :return: 密度関数
+        :rtype: np.ndarray
+        """
 
-        if theta is not None:
-            tth = theta.copy()
-        else:
-            if self.theta is not None:
-                tth = self.theta.copy()
-            else:
-                tth = np.arange(d.shape[0])
-
-        if not initparams:
-            if intensity is not None:
-                initparams = self.calc_init(intensity = intensity, theta = tth, nop = nop)
-            else:
-                initparams = self.calc_init(frame = frame, nop = nop)
-
-        methods = ["trf", "dogbox"]
-
-        bounds_up = [np.inf, tth[-1], np.inf, np.inf, 1] * nop
-        bounds_down = [0, tth[0], 0, 0, 0] * nop
-        bounds = (
-            tuple([-np.inf, -np.inf] + bounds_down),
-            tuple([np.inf, np.inf] + bounds_up)
+        # 引数
+        factor = params["factor"]
+        
+        # ガウシアン
+        g = self.gaussian(
+            x = x,
+            params = params,
         )
         
+        # ローレンチアン
+        l = self.lorenzian(
+            x = x,
+            params = params,
+        )
+
+        # 畳み込み
+        value = factor*l + (1-factor)*g
+
+        return value
+    
+    def psdVoigt_area(self,
+                      params: dict,
+                      ) -> float:
+        """
+        :param params: {
+            "height": ピークの高さ (float, >0),
+            "fwhm": 半値幅 (float, >0),
+            "factor": ローレンチアン比率 (float, 0~1),
+        }
+        :type params: dict
+        :return: ピークの面積
+        :rtype: float
+        """
+
+        # 引数
+        factor = params["factor"]
+        
+        # ガウシアン
+        g = self.gaussian_area(params = params)
+        
+        # ローレンチアン
+        l = self.lorenzian_area(params = params)
+
+        # 畳み込み
+        value = factor*l + (1-factor)*g
+
+        return value
+    
+    def asympsdVoigt(self,
+                     x: np.ndarray,
+                     params: dict,
+                     ) -> np.ndarray:
+        """
+        :param x: 軸の値
+        :type x: np.ndarray
+        :param params: {
+            "center": ピーク位置 (float),
+            "height": ピークの高さ (float, >0),
+            "left": {
+                "fwhm": 半値幅 (float, >0),
+                "factor": ローレンチアン比率 (float, 0~1),
+            },
+            "right": {
+                "fwhm": 半値幅 (float, >0),
+                "factor": ローレンチアン比率 (float, 0~1),
+            },
+        }
+        :type params: dict
+        :return: 密度関数
+        :rtype: np.ndaary
+        """
+
+        # 引数
+        center = params["center"]
+        height = params["height"]
+
+        # for文用のパラメーター
+        masks = {
+            'left': (x < center),
+            'right': (x >= center),
+        }
+        value = np.zeros(x.shape)
+
+        # 関数
+        for k in masks.keys():
+            
+            # 引数
+            params_tmp = params[k].copy()
+            params_tmp["center"] = center
+            params_tmp["height"] = 1
+
+            # 演算
+            value += self.psdVoigt(
+                x = x,
+                params = params_tmp,
+            )*(masks[k].astype(np.float64))
+        
+        # 高さ補正
+        value *= height
+        
+        return value
+    
+    def asympsdVoigt_area(self,
+                          params: dict,
+                          ) -> float:
+        """
+        :param params: {
+            "height": ピークの高さ (float, >0),
+            "left": {
+                "fwhm": 半値幅 (float, >0),
+                "factor": ローレンチアン比率 (float, 0~1),
+            },
+            "right": {
+                "fwhm": 半値幅 (float, >0),
+                "factor": ローレンチアン比率 (float, 0~1),
+            },
+        }
+        :type params: dict
+        :return: ピーク面積
+        :rtype: float
+        """
+        
+        # 格納用変数の定義
+        value = 0
+
+        for side in ["left", "right"]:
+            params_tmp = params[side].copy()
+            params_tmp["height"] = params["height"]
+            value += self.psdVoigt_area(params_tmp)/2
+
+        return value    
+    
+    def dict_to_lists(self,
+                      d: dict,
+                      ) -> tuple[list, list]:
+        """
+        辞書(d)からキーのリストと値のリストに変換する。
+        ネスト構造に対応するため、キーはタプルとして階層構造を保持する。
+        :params d: dictionary
+        :type d: dict
+        :return: (keys, values)
+        :rtype: tuple[list, list]
+        """
+        keys = []
+        values = []
+
+        def _traverse(current_d, current_path):
+            for k, v in current_d.items():
+                new_path = current_path + (k,)
+                if isinstance(v, dict):
+                    # 値が辞書ならさらに深く探索（再帰）
+                    _traverse(v, new_path)
+                else:
+                    # 辞書でなければ末端の値として保存
+                    keys.append(new_path)
+                    values.append(float(v)) # floatとして保存
+
+        _traverse(d, ())
+        return keys, values
+
+    def lists_to_dict(self,
+                      keys: list,
+                      values: list,
+                      ) -> dict:
+        """
+        キーのリストと値のリストからネストされた辞書(d)に変換する。
+        キーのタプル構造に基づいて階層を復元する。
+        :params keys: 辞書のkey
+        :type keys: list
+        :params values: 辞書の内容
+        :type values: list
+        :return: 辞書
+        :rtype: dict
+        """
+        d = {}
+        for key_path, val in zip(keys, values):
+            current_level = d
+            # 最下層のキーの1つ手前まで辞書を掘り下げる（なければ作成）
+            for k in key_path[:-1]:
+                current_level = current_level.setdefault(k, {})
+            
+            # 最下層に値をセット
+            current_level[key_path[-1]] = val
+            
+        return d
+    
+    def calc_initparams(self,
+                        **kargs,
+                        ) -> dict:
+        """
+        初期値を推定する
+
+        :param x: Value of x
+        :type x: np.ndarray
+        :param y: Value of y
+        :type y: np.ndarray
+        :param func: Fitting function
+        :type func: str
+        :return: Initial parameters for fitting
+        :rtype: dict
+        """
+
+        # 引数
+        x: np.ndarray = kargs.get("x", self.x.copy())
+        y: np.ndarray = kargs.get("y", self.y.copy())
+        func_label: str = kargs.get("func", "asympsdVoigt")
+
+        # func_labelの確認
+        if not func_label in self.func_list:
+            raise KeyError("{} is not in the function list. Please provide valid function, such as {}.".format(func_label, self.func_list))
+
+        # 格納用変数の定義
+        value = dict()
+
+        # backgroundの推定 (y = b0 + b1*x)
+        b1 = (y[0] - y[-1])/(x[0] - x[-1])
+        b0 = y[0] - b1*x[0]
+        value["b0"] = b0
+        value["b1"] = b1
+
+        # centerの推定
+        center = np.average(x, weights = y)
+        value["center"] = center
+
+        # ピーク高さの推定
+        height = np.max(y) - (b0 + b1*center)
+        value["height"] = height
+
+        # 半値幅の推定
+        fwhm = np.sqrt(np.average(np.square(x-center), weights = y))/2.355
+        if func_label == "asympsdVoigt":
+            value["left"] = dict()
+            value["right"] = dict()
+            for k in ["left", "right"]:
+                value[k]["fwhm"] = fwhm
+        else:
+            value["fwhm"] = fwhm
+
+        # ローレンチアン比率の推定
+        if func_label == "psdVoigt":
+            value["factor"] = 0.5
+        elif func_label == "asympsdVoigt":
+            for k in ["left", "right"]:
+                value[k]["factor"] = 0.5
+        else:
+            pass
+
+        return value
+
+    def fit(self,
+            **kargs,
+            ) -> dict:
+        """
+        フィッティングを行う
+
+        :param x: Value of x (optional)
+        :type x: np.ndarray
+        :param y: Valume of y (optional)
+        :type y: np.ndarray
+        :param initparams: initial parameters for fitting (optional)
+        :type initparams: dict
+        :param func: fitting function
+        :type func: str
+        :return: {
+            "params": fitting result,
+            "err": fitting err,
+            "popt": p optimize,
+            "pcov": p covariance matrix,
+            "key": params' key for optimizing,
+            "func": fitting function
+        }
+        :rtype: dict
+        """
+        
+        x = kargs.get("x", self.x)
+        y = kargs.get("y", self.x)
+        ip = kargs.get("initparams", self.initparams)
+        func_label = kargs.get("func", "asympsdVoigt")
+
+        # 初期値のkeyとvalueを取得
+        ip_keys, ip_values = self.dict_to_lists(ip)
+
+        # それぞれの関数のbounds, funcを定義
+        bounds_up = [np.inf, np.inf]
+        bounds_down = [-np.inf, -np.inf]
+        if func_label == "gaussian": 
+            bounds_up += [x[-1], np.inf, np.inf]
+            bounds_down += [x[0], 0, 0]
+            f = self.gaussian
+        elif func_label == "lorenzian": 
+            bounds_up += [x[-1], np.inf, np.inf]
+            bounds_down += [x[0], 0, 0]
+            f = self.lorenzian
+        elif func_label == "psdVoigt":
+            bounds_up += [x[-1], np.inf, np.inf, 1]
+            bounds_down += [x[0], 0, 0, 0]
+            f = self.psdVoigt
+        elif func_label == "asympsdVoigt":
+            bounds_up += [x[-1], np.inf, np.inf, 1, np.inf, 1]
+            bounds_down += [x[0], 0, 0, 0, 0, 0]
+            f = self.asympsdVoigt
+        bounds = (
+            tuple(bounds_down),
+            tuple(bounds_up)
+        )
+
+        # フィッティング用の関数を定義
+        def func(x, *args):
+            params = self.lists_to_dict(ip_keys, list(args))
+            return self.background(x, params) + f(x, params)
+        
+        # フィッティングを行う
+        methods = ["trf", "dogbox"]
         for method in methods:
             try:
-                func = pseudoVoigt
-                (popt, pcov) = sp.optimize.curve_fit(func,
-                                                     tth,
-                                                     d,
-                                                     p0 = initparams,
-                                                     maxfev = 4000,
-                                                     bounds=bounds,
-                                                     method = method,
-                                                     )
+                popt, pcov = sp.optimize.curve_fit(
+                    func,
+                    x,
+                    y,
+                    p0 = ip_values,
+                    maxfev = 4000,
+                    bounds = bounds,
+                    method = method,
+                )
             except RuntimeError as errorcontent:
                 if method == methods[-1]:
                     return errorcontent # type: ignore
                 pass
-            else:
-                res = d - func(tth,*popt)
-                rss = np.sum(np.square(res)) # residual sum of squares
-                tss = np.sum(np.square(d-np.mean(d))) # total sum of squares = tss
-                r_squared = 1 - (rss / tss)
-                
-                break
-        return [popt, np.diag(pcov), r_squared] # type: ignore
 
-    def fit(self,
-            nop: int = 1,
-            log = True
-            ) -> tuple:
-
-        l_popt = []
-        l_pcov = []
-        l_r2 = []
-
-        loop = tqdm(list(range(self.intensity.shape[0]))) if log else range(self.intensity.shape[0])
-        for i in loop:
-            _ = self.fit_Vigot_func(frame = i,
-                                    nop = nop,
-                                    )
-            popt = _[0]
-            pcov = _[1]
-            r_squared = _[2]
-
-            l_popt.append([popt])
-            l_pcov.append([pcov])
-            l_r2.append(r_squared)
-
-        popts = np.block(l_popt)
-        pcovs = np.block(l_pcov)
-        r2 = np.array(l_r2)
-
-        return (popts, pcovs, r2)
-    
-    def variables(self, nop = 1):
-        value = ["b0", "b1"]
-        value += ["amp", "mu", "fwhm_g", "fwhm_l", "eta"] * nop
-        return value
-
-def pseudoVoigt(x, b0, b1, *ps):
-    value = b0 + b1*x
-    for i in range(len(ps)//5):
-        amp = ps[5*i]
-        mu = ps[5*i+1]
-        fwhm_g = ps[5*i+2]
-        fwhm_l = ps[5*i+3]
-        eta = ps[5*i+4]
-
-        sigma = fwhm_g/2/np.sqrt(2*np.log(2))
-        gamma = fwhm_l/2
+        # フィッティング結果を辞書に直す
+        resparams = self.lists_to_dict(ip_keys, popt)
+        res = {
+            "params": resparams,
+            "err": self.lists_to_dict(keys = ip_keys, values = list(np.sqrt(np.diag(pcov)))),
+            "popt": popt,
+            "pcov": pcov,
+            "key": ip_keys,
+            "func": (lambda x, params: (self.background(x, params) + f(x, params)))
+        }
         
-        g = np.exp(-np.power(x-mu, 2)/2/np.power(sigma,2))
-        l = 1/(1+np.power((x-mu)/gamma, 2))
-
-        value += amp*(g*eta + l*(1-eta))
-    return value
-
-if __name__ == "__main__":
-
-    fig, ax = plt.subplots()
-
-    x = np.linspace(-1,1, 100)
-    for eta in np.linspace(0,1,10):
-        popt = [
-            0,
-            0,
-            1, # amp
-            0, # mu
-            0.5, # fwhm_g
-            0.5, # fwhm_l
-            eta, # eta
-        ]
-        y = pseudoVoigt(x, *popt)
-        ax.plot(x,y)
-    plt.show()
-    plt.close()
+        return res
+    
