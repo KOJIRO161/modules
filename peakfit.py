@@ -504,4 +504,131 @@ class peakfit:
         }
         
         return res
-    
+
+import numpy as np
+import scipy as sp
+
+
+def arPLS(
+    signal,
+    two_theta=None,
+    step=None,
+    lam=None,
+    d=2,
+    max_iter=50,
+    tol=1e-6,
+):
+    """
+    arPLS baseline correction for XRD.
+
+    Parameters
+    ----------
+    signal : ndarray
+
+    two_theta : ndarray
+        2theta axis
+
+    step : float
+        2theta step [deg]
+
+    lam : float or None
+        smoothing parameter
+
+    d : int
+        difference order
+
+    max_iter : int
+
+    tol : float
+
+    Returns
+    -------
+    baseline : ndarray
+    """
+
+    y = np.asarray(signal, dtype=float)
+
+    N = len(y)
+
+    # ------------------------
+    # step determination
+    # ------------------------
+    if step is None:
+
+        if two_theta is None:
+            raise ValueError(
+                "two_theta または step が必要です"
+            )
+
+        step = np.median(np.diff(two_theta))
+
+    # ------------------------
+    # λ auto
+    # ------------------------
+    if lam is None:
+
+        # step=0.005° → λ=1e6
+
+        lam = 1e6 * (0.005 / step) ** 4
+
+    # ------------------------
+    # difference matrix
+    # ------------------------
+    D = sp.sparse.eye(N, format="csc")
+
+    for _ in range(d):
+        D = D[1:, :] - D[:-1, :]
+
+    H = lam * (D.T @ D)
+
+    # 初期重み
+
+    w = np.ones(N)
+
+    for it in range(max_iter):
+
+        W = sp.sparse.diags(w)
+
+        Z = W + H
+
+        baseline = sp.sparse.linalg.spsolve(
+            Z,
+            w * y
+        )
+
+        residual = y - baseline
+
+        negative = residual[residual < 0]
+
+        if len(negative) < 2:
+            break
+
+        mu = np.mean(negative)
+        sigma = np.std(negative)
+
+        w_new = 1.0 / (
+            1.0
+            + np.exp(
+                2.0
+                * (residual - (2*sigma - mu))
+                / (sigma + 1e-12)
+            )
+        )
+
+        # 収束判定
+
+        rel_change = (
+            np.linalg.norm(w - w_new)
+            / np.linalg.norm(w)
+        )
+
+        w = w_new
+
+        if rel_change < tol:
+            print(
+                f"Converged in "
+                f"{it+1} iterations"
+            )
+            break
+
+    return baseline
