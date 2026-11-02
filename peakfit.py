@@ -625,10 +625,6 @@ def arPLS(
         w = w_new
 
         if rel_change < tol:
-            print(
-                f"Converged in "
-                f"{it+1} iterations"
-            )
             break
 
     return baseline
