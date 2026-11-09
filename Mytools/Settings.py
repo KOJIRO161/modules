@@ -4,8 +4,8 @@ import sys
 sys.dont_write_bytecode = True
 
 if True: # グラフの出力設定
-    plt.rcParams['font.family'] ='Arial' # 使用するフォント Arial or DejaVu Serif
-    plt.rcParams['mathtext.fontset'] = 'dejavusans'     # 数式用のフォント or "cm"
+    plt.rcParams['font.family'] ='DejaVu Sans' # 使用するフォント Arial or DejaVu Serif
+    plt.rcParams['mathtext.fontset'] = 'cm'     # 数式用のフォント or "cm"
     plt.rcParams['xtick.direction'] = 'in'      # x軸の目盛線が内向き('in')か外向き('out')か双方向か('inout')
     plt.rcParams['ytick.direction'] = 'in'      # y軸の目盛線が内向き('in')か外向き('out')か双方向か('inout')
     plt.rcParams['xtick.major.width'] = 1.0     # x軸主目盛り線の線幅
