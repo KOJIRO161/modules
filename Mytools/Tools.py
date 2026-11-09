@@ -97,8 +97,8 @@ def his2array(filename):
 
     start_position = info["headerSize"] + info["imageHeaderSize"]
 
-    image_data = np.frombuffer(data[start_position:], dtype=np.uint16)
-    sequential_image_intensities = image_data.reshape((info["numberOfFrame"], imageHeight, imageWidth))
+    image_data = np.frombuffer(data[start_position:], dtype=np.uint16) # type: ignore
+    sequential_image_intensities = image_data.reshape((info["numberOfFrame"], imageHeight, imageWidth)) # type: ignore
 
     img = sequential_image_intensities[0]
     return img
@@ -148,9 +148,9 @@ def get_total_size(obj, seen=None):
     seen.add(obj_id)
 
     if isinstance(obj, dict):
-        size += sum(get_total_size(k, seen) + get_total_size(v, seen) for k, v in obj.items())
+        size += sum(get_total_size(k, seen) + get_total_size(v, seen) for k, v in obj.items()) # type: ignore
     elif isinstance(obj, (list, tuple, set, frozenset)):
-        size += sum(get_total_size(i, seen) for i in obj)
+        size += sum(get_total_size(i, seen) for i in obj) # type: ignore
     return size
 
 if __name__ == "__main__":
